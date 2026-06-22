@@ -1,0 +1,134 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Tile as TileModel } from "./types";
+import { BOARDS } from "./data/boards";
+import { Board } from "./components/Board";
+import { PhraseBar } from "./components/PhraseBar";
+import { ToneSelector } from "./components/ToneSelector";
+import { Settings } from "./components/Settings";
+import { loadSettings, saveSettings, type Settings as SettingsModel } from "./lib/settings";
+import { speak } from "./lib/speech";
+import { t, TONE_EMOJI } from "./i18n";
+
+interface ComposedWord {
+  emoji: string;
+  text: string;
+}
+
+export default function App() {
+  const [settings, setSettings] = useState<SettingsModel>(loadSettings);
+  const [stack, setStack] = useState<string[]>(["home"]);
+  const [words, setWords] = useState<ComposedWord[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  const boardId = stack[stack.length - 1];
+  const board = BOARDS[boardId] ?? BOARDS.home;
+  const atHome = stack.length === 1;
+
+  useEffect(() => saveSettings(settings), [settings]);
+  useEffect(() => {
+    document.documentElement.lang = settings.lang;
+  }, [settings.lang]);
+
+  const patchSettings = useCallback(
+    (patch: Partial<SettingsModel>) => setSettings((s) => ({ ...s, ...patch })),
+    [],
+  );
+
+  const say = useCallback(
+    (text: string) => {
+      speak(text, { lang: settings.lang, tone: settings.tone, voiceName: settings.voiceName });
+      setFlash(text);
+      window.setTimeout(() => setFlash((f) => (f === text ? null : f)), 1600);
+    },
+    [settings.lang, settings.tone, settings.voiceName],
+  );
+
+  const onSelect = useCallback(
+    (tile: TileModel) => {
+      if (tile.kind === "board" && tile.to) {
+        setStack((s) => [...s, tile.to!]);
+      } else if (tile.kind === "phrase") {
+        say(tile.label[settings.lang]);
+      } else if (tile.kind === "word") {
+        setWords((w) => [...w, { emoji: tile.emoji, text: tile.label[settings.lang] }]);
+      }
+    },
+    [say, settings.lang],
+  );
+
+  const goBack = useCallback(() => {
+    setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+  }, []);
+
+  const speakPhrase = useCallback(() => {
+    if (words.length === 0) return;
+    say(words.map((w) => w.text).join(" "));
+  }, [words, say]);
+
+  const title = useMemo(() => board.title[settings.lang], [board, settings.lang]);
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <button
+          type="button"
+          className="iconbtn"
+          onClick={goBack}
+          disabled={atHome}
+          aria-label={t("back", settings.lang)}
+        >
+          ← {atHome ? "" : t("back", settings.lang)}
+        </button>
+
+        <h1 className="topbar__title">
+          <span aria-hidden>{board.emoji}</span> {atHome ? t("appName", settings.lang) : title}
+        </h1>
+
+        <button
+          type="button"
+          className="iconbtn"
+          onClick={() => setShowSettings(true)}
+          aria-label={t("settings", settings.lang)}
+        >
+          ⚙️
+        </button>
+      </header>
+
+      <div className="toolbar">
+        <span className="toolbar__hint">{t("tapOrGaze", settings.lang)}</span>
+        <ToneSelector
+          value={settings.tone}
+          lang={settings.lang}
+          onChange={(tone) => patchSettings({ tone })}
+        />
+      </div>
+
+      <main className="content">
+        <Board board={board} lang={settings.lang} dwellMs={settings.dwellMs} onSelect={onSelect} />
+      </main>
+
+      <PhraseBar
+        words={words}
+        lang={settings.lang}
+        dwellMs={settings.dwellMs}
+        onSpeak={speakPhrase}
+        onClear={() => setWords([])}
+      />
+
+      {flash && (
+        <div className="flash" role="status">
+          <span aria-hidden>{TONE_EMOJI[settings.tone]}</span> {flash}
+        </div>
+      )}
+
+      {showSettings && (
+        <Settings
+          settings={settings}
+          onChange={patchSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+    </div>
+  );
+}
