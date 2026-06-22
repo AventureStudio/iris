@@ -2,10 +2,14 @@ import type { Lang, Tone } from "../types";
 import { LANG_BCP47 } from "../i18n";
 
 /**
- * Single voice engine over the browser SpeechSynthesis API.
- * No backend, no API key. Emotion is delivered as prosody (rate + pitch),
- * leaving the spoken text unchanged — the message stays predictable and the
- * tone is "how" it is said, not "what" is said.
+ * Voice engine. Two paths:
+ *  - Browser SpeechSynthesis (default, no key).
+ *  - ElevenLabs via the `/api/tts` serverless proxy (the API key lives in a
+ *    Vercel env var and is never exposed to the client). On any proxy failure
+ *    we fall back to SpeechSynthesis so speech never silently dies.
+ *
+ * Emotion is delivered as prosody: SpeechSynthesis varies rate/pitch; ElevenLabs
+ * varies voice_settings (server-side). The spoken text is never rewritten.
  */
 
 interface ToneProsody {
@@ -55,25 +59,70 @@ export interface SpeakOptions {
   lang: Lang;
   tone: Tone;
   voiceName: string;
+  useElevenLabs: boolean;
 }
 
-/** Speak text, cancelling anything currently playing (monotonic — last call wins). */
-export function speak(text: string, opts: SpeakOptions): void {
-  if (typeof speechSynthesis === "undefined" || !text.trim()) return;
-  speechSynthesis.cancel();
+// Monotonic guard so a newer utterance always cancels an older one.
+let playId = 0;
+let audioEl: HTMLAudioElement | null = null;
 
+function speakBrowser(text: string, opts: SpeakOptions): void {
+  if (typeof speechSynthesis === "undefined") return;
+  speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   const voice = pickVoice(opts.lang, opts.voiceName);
   if (voice) u.voice = voice;
   u.lang = LANG_BCP47[opts.lang];
-
-  const prosody = TONE_PROSODY[opts.tone];
-  u.rate = prosody.rate;
-  u.pitch = prosody.pitch;
-
+  const p = TONE_PROSODY[opts.tone];
+  u.rate = p.rate;
+  u.pitch = p.pitch;
   speechSynthesis.speak(u);
 }
 
-export function stopSpeaking(): void {
+async function speakEleven(text: string, opts: SpeakOptions, id: number): Promise<void> {
+  const res = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text, lang: opts.lang, tone: opts.tone }),
+  });
+  if (!res.ok) throw new Error("tts proxy " + res.status);
+  const blob = await res.blob();
+  if (id !== playId) return; // superseded while fetching
+  const url = URL.createObjectURL(blob);
+  if (audioEl) {
+    audioEl.pause();
+    audioEl = null;
+  }
+  const a = new Audio(url);
+  audioEl = a;
+  a.onended = a.onerror = () => URL.revokeObjectURL(url);
+  await a.play();
+}
+
+export function speak(text: string, opts: SpeakOptions): void {
+  if (!text.trim()) return;
+  const id = ++playId;
+  // Stop anything already playing on either path.
   if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+  if (audioEl) {
+    audioEl.pause();
+    audioEl = null;
+  }
+
+  if (opts.useElevenLabs) {
+    speakEleven(text, opts, id).catch(() => {
+      if (id === playId) speakBrowser(text, opts);
+    });
+  } else {
+    speakBrowser(text, opts);
+  }
+}
+
+export function stopSpeaking(): void {
+  playId++;
+  if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+  if (audioEl) {
+    audioEl.pause();
+    audioEl = null;
+  }
 }

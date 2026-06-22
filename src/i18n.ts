@@ -15,7 +15,14 @@ type UIKey =
   | "home"
   | "emptyPhrase"
   | "tapOrGaze"
-  | "seconds";
+  | "seconds"
+  | "eyeTracking"
+  | "sensitivity"
+  | "invertX"
+  | "invertY"
+  | "showPreview"
+  | "recenter"
+  | "elevenLabs";
 
 export const UI: Record<UIKey, Record<Lang, string>> = {
   appName: { nl: "Iris", en: "Iris", fr: "Iris" },
@@ -37,6 +44,13 @@ export const UI: Record<UIKey, Record<Lang, string>> = {
     fr: "Regarde ou touche pour choisir",
   },
   seconds: { nl: "s", en: "s", fr: "s" },
+  eyeTracking: { nl: "Oogbesturing (camera)", en: "Eye tracking (camera)", fr: "Suivi oculaire (caméra)" },
+  sensitivity: { nl: "Gevoeligheid", en: "Sensitivity", fr: "Sensibilité" },
+  invertX: { nl: "Spiegel horizontaal", en: "Invert horizontal", fr: "Inverser horizontal" },
+  invertY: { nl: "Spiegel verticaal", en: "Invert vertical", fr: "Inverser vertical" },
+  showPreview: { nl: "Cameravoorbeeld", en: "Camera preview", fr: "Aperçu caméra" },
+  recenter: { nl: "Midden herijken", en: "Recenter", fr: "Recentrer" },
+  elevenLabs: { nl: "Natuurlijke stem (ElevenLabs)", en: "Natural voice (ElevenLabs)", fr: "Voix naturelle (ElevenLabs)" },
 };
 
 export const TONE_LABELS: Record<Tone, Record<Lang, string>> = {

@@ -14,6 +14,9 @@ export type Localized = Record<Lang, string>;
 export interface Tile {
   id: string;
   kind: "phrase" | "word" | "board";
+  /** ARASAAC search keyword (English). Resolved to the familiar pictogram; the
+   *  emoji is the offline fallback when no picto is found. */
+  keyword: string;
   emoji: string;
   label: Localized;
   /** For kind === "board": id of the board to open. */

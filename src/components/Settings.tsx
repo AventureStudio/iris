@@ -8,10 +8,11 @@ const LANGS: Lang[] = ["nl", "en", "fr"];
 interface Props {
   settings: SettingsModel;
   onChange: (patch: Partial<SettingsModel>) => void;
+  onRecenter: () => void;
   onClose: () => void;
 }
 
-export function Settings({ settings, onChange, onClose }: Props) {
+export function Settings({ settings, onChange, onRecenter, onClose }: Props) {
   const voices = listVoices();
   return (
     <div className="modal" role="dialog" aria-modal="true" aria-label={t("settings", settings.lang)}>
@@ -20,10 +21,7 @@ export function Settings({ settings, onChange, onClose }: Props) {
 
         <label className="field">
           <span>{t("language", settings.lang)}</span>
-          <select
-            value={settings.lang}
-            onChange={(e) => onChange({ lang: e.target.value as Lang })}
-          >
+          <select value={settings.lang} onChange={(e) => onChange({ lang: e.target.value as Lang })}>
             {LANGS.map((l) => (
               <option key={l} value={l}>{LANG_LABELS[l]}</option>
             ))}
@@ -36,10 +34,7 @@ export function Settings({ settings, onChange, onClose }: Props) {
             {t("seconds", settings.lang)}
           </span>
           <input
-            type="range"
-            min={600}
-            max={4000}
-            step={100}
+            type="range" min={600} max={4000} step={100}
             value={settings.dwellMs}
             onChange={(e) => onChange({ dwellMs: Number(e.target.value) })}
           />
@@ -47,18 +42,65 @@ export function Settings({ settings, onChange, onClose }: Props) {
 
         <label className="field">
           <span>{t("voice", settings.lang)}</span>
-          <select
-            value={settings.voiceName}
-            onChange={(e) => onChange({ voiceName: e.target.value })}
-          >
+          <select value={settings.voiceName} onChange={(e) => onChange({ voiceName: e.target.value })}>
             <option value="">{t("defaultVoice", settings.lang)}</option>
             {voices.map((v) => (
-              <option key={v.name} value={v.name}>
-                {v.name} ({v.lang})
-              </option>
+              <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
             ))}
           </select>
         </label>
+
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={settings.useElevenLabs}
+            onChange={(e) => onChange({ useElevenLabs: e.target.checked })}
+          />
+          <span>🗣️ {t("elevenLabs", settings.lang)}</span>
+        </label>
+
+        {/* ---- Eye tracking ---- */}
+        <div className="field field--group">
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={settings.gazeEnabled}
+              onChange={(e) => onChange({ gazeEnabled: e.target.checked })}
+            />
+            <span>👁️ {t("eyeTracking", settings.lang)}</span>
+          </label>
+
+          {settings.gazeEnabled && (
+            <div className="subfields">
+              <label className="field">
+                <span>{t("sensitivity", settings.lang)}: {settings.gazeSensitivity.toFixed(1)}</span>
+                <input
+                  type="range" min={1} max={8} step={0.5}
+                  value={settings.gazeSensitivity}
+                  onChange={(e) => onChange({ gazeSensitivity: Number(e.target.value) })}
+                />
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={settings.gazeInvertX}
+                  onChange={(e) => onChange({ gazeInvertX: e.target.checked })} />
+                <span>{t("invertX", settings.lang)}</span>
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={settings.gazeInvertY}
+                  onChange={(e) => onChange({ gazeInvertY: e.target.checked })} />
+                <span>{t("invertY", settings.lang)}</span>
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={settings.gazePreview}
+                  onChange={(e) => onChange({ gazePreview: e.target.checked })} />
+                <span>{t("showPreview", settings.lang)}</span>
+              </label>
+              <button type="button" className="btn-secondary" onClick={onRecenter}>
+                🎯 {t("recenter", settings.lang)}
+              </button>
+            </div>
+          )}
+        </div>
 
         <button type="button" className="modal__close" onClick={onClose}>
           {t("close", settings.lang)}

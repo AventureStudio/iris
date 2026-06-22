@@ -7,6 +7,14 @@ export interface Settings {
   tone: Tone;
   /** Preferred SpeechSynthesis voice name, or "" for the browser default. */
   voiceName: string;
+  /** Webcam eye/head tracking (MediaPipe). */
+  gazeEnabled: boolean;
+  gazeSensitivity: number;
+  gazeInvertX: boolean;
+  gazeInvertY: boolean;
+  gazePreview: boolean;
+  /** Use ElevenLabs (via /api/tts) instead of the browser voice. */
+  useElevenLabs: boolean;
 }
 
 const KEY = "iris.settings.v1";
@@ -16,6 +24,12 @@ export const DEFAULTS: Settings = {
   dwellMs: 1200,
   tone: "normal",
   voiceName: "",
+  gazeEnabled: false,
+  gazeSensitivity: 3,
+  gazeInvertX: true,
+  gazeInvertY: false,
+  gazePreview: true,
+  useElevenLabs: false,
 };
 
 export function loadSettings(): Settings {

@@ -5,6 +5,7 @@ import { Board } from "./components/Board";
 import { PhraseBar } from "./components/PhraseBar";
 import { ToneSelector } from "./components/ToneSelector";
 import { Settings } from "./components/Settings";
+import { GazeController } from "./components/GazeController";
 import { loadSettings, saveSettings, type Settings as SettingsModel } from "./lib/settings";
 import { speak } from "./lib/speech";
 import { t, TONE_EMOJI } from "./i18n";
@@ -20,6 +21,7 @@ export default function App() {
   const [words, setWords] = useState<ComposedWord[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [recenterNonce, setRecenterNonce] = useState(0);
 
   const boardId = stack[stack.length - 1];
   const board = BOARDS[boardId] ?? BOARDS.home;
@@ -37,11 +39,16 @@ export default function App() {
 
   const say = useCallback(
     (text: string) => {
-      speak(text, { lang: settings.lang, tone: settings.tone, voiceName: settings.voiceName });
+      speak(text, {
+        lang: settings.lang,
+        tone: settings.tone,
+        voiceName: settings.voiceName,
+        useElevenLabs: settings.useElevenLabs,
+      });
       setFlash(text);
       window.setTimeout(() => setFlash((f) => (f === text ? null : f)), 1600);
     },
-    [settings.lang, settings.tone, settings.voiceName],
+    [settings.lang, settings.tone, settings.voiceName, settings.useElevenLabs],
   );
 
   const onSelect = useCallback(
@@ -85,14 +92,25 @@ export default function App() {
           <span aria-hidden>{board.emoji}</span> {atHome ? t("appName", settings.lang) : title}
         </h1>
 
-        <button
-          type="button"
-          className="iconbtn"
-          onClick={() => setShowSettings(true)}
-          aria-label={t("settings", settings.lang)}
-        >
-          ⚙️
-        </button>
+        <div className="topbar__right">
+          <button
+            type="button"
+            className={"iconbtn" + (settings.gazeEnabled ? " iconbtn--on" : "")}
+            onClick={() => patchSettings({ gazeEnabled: !settings.gazeEnabled })}
+            aria-label={t("eyeTracking", settings.lang)}
+            aria-pressed={settings.gazeEnabled}
+          >
+            👁️
+          </button>
+          <button
+            type="button"
+            className="iconbtn"
+            onClick={() => setShowSettings(true)}
+            aria-label={t("settings", settings.lang)}
+          >
+            ⚙️
+          </button>
+        </div>
       </header>
 
       <div className="toolbar">
@@ -126,9 +144,22 @@ export default function App() {
         <Settings
           settings={settings}
           onChange={patchSettings}
+          onRecenter={() => setRecenterNonce((n) => n + 1)}
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      <GazeController
+        enabled={settings.gazeEnabled}
+        dwellMs={settings.dwellMs}
+        config={{
+          sensitivity: settings.gazeSensitivity,
+          invertX: settings.gazeInvertX,
+          invertY: settings.gazeInvertY,
+        }}
+        recenterNonce={recenterNonce}
+        showPreview={settings.gazePreview}
+      />
     </div>
   );
 }

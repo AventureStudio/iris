@@ -1,5 +1,6 @@
 import type { Tile as TileModel, Lang } from "../types";
 import { useDwell } from "../hooks/useDwell";
+import { Symbol } from "./Symbol";
 
 interface Props {
   tile: TileModel;
@@ -23,7 +24,9 @@ export function Tile({ tile, lang, dwellMs, accent, onSelect }: Props) {
     >
       {/* Dwell fill grows from the bottom as the gaze rests. */}
       <span className="tile__fill" style={{ transform: `scaleY(${progress})` }} aria-hidden />
-      <span className="tile__emoji" aria-hidden>{tile.emoji}</span>
+      <span className="tile__emoji">
+        <Symbol keyword={tile.keyword} emoji={tile.emoji} />
+      </span>
       <span className="tile__label">{tile.label[lang]}</span>
       {tile.kind === "board" && <span className="tile__chevron" aria-hidden>›</span>}
     </button>
