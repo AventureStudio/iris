@@ -10,15 +10,23 @@ export interface Pt {
 }
 
 /**
- * Affine map gaze(-1..1) → screen(0..1), fitted from multi-point calibration:
- *   sx = ax*gx + bx*gy + cx ,  sy = ay*gx + by*gy + cy
- * It absorbs scale, offset, axis cross-coupling and inversion, so once calibrated
- * the manual sensitivity/invert knobs are not needed.
+ * Quadratic map gaze(-1..1) → screen(0..1), fitted from multi-point calibration
+ * on the basis [1, gx, gy, gx*gy, gx², gy²]:
+ *   sx = kx·basis ,  sy = ky·basis
+ * The cross and square terms correct webcam lens distortion and the
+ * non-linearity of gaze toward the edges that a plain affine map cannot. It also
+ * absorbs scale, offset and inversion, so the manual knobs are not needed once
+ * calibrated.
  */
 export interface GazeCalibration {
-  ax: number; bx: number; cx: number;
-  ay: number; by: number; cy: number;
+  kx: number[]; // length 6
+  ky: number[]; // length 6
 }
+
+const basis = (gx: number, gy: number) => [1, gx, gy, gx * gy, gx * gx, gy * gy];
+const dot = (a: number[], b: number[]) => a.reduce((s, v, i) => s + v * b[i], 0);
+const validCal = (c: GazeCalibration | null | undefined): c is GazeCalibration =>
+  !!c && Array.isArray(c.kx) && c.kx.length === 6 && Array.isArray(c.ky) && c.ky.length === 6;
 
 export interface MapOpts {
   sensitivity: number;
@@ -34,11 +42,11 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 export function gazeToPoint(gx: number, gy: number, o: MapOpts): Pt {
   const W = window.innerWidth;
   const H = window.innerHeight;
-  if (o.calibration) {
-    const c = o.calibration;
+  if (validCal(o.calibration)) {
+    const b = basis(gx, gy);
     return {
-      x: clamp01(c.ax * gx + c.bx * gy + c.cx) * W,
-      y: clamp01(c.ay * gx + c.by * gy + c.cy) * H,
+      x: clamp01(dot(o.calibration.kx, b)) * W,
+      y: clamp01(dot(o.calibration.ky, b)) * H,
     };
   }
   const gainX = 0.18 * o.sensitivity;
@@ -51,20 +59,23 @@ export function gazeToPoint(gx: number, gy: number, o: MapOpts): Pt {
   };
 }
 
-/** Solve a 3x3 linear system by Cramer's rule; null if (near-)singular. */
-function solve3(m: number[][], v: number[]): [number, number, number] | null {
-  const det = (a: number[][]) =>
-    a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
-    a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
-    a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
-  const d = det(m);
-  if (Math.abs(d) < 1e-9) return null;
-  const withCol = (i: number) => {
-    const mm = m.map((row) => row.slice());
-    for (let r = 0; r < 3; r++) mm[r][i] = v[r];
-    return mm;
-  };
-  return [det(withCol(0)) / d, det(withCol(1)) / d, det(withCol(2)) / d];
+/** Solve a square system A·x = v by Gaussian elimination with partial pivoting. */
+function solveLinear(A: number[][], v: number[]): number[] | null {
+  const n = v.length;
+  const M = A.map((row, i) => [...row, v[i]]);
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    if (Math.abs(M[piv][col]) < 1e-9) return null;
+    [M[col], M[piv]] = [M[piv], M[col]];
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = M[r][col] / M[col][col];
+      for (let c = col; c <= n; c++) M[r][c] -= f * M[col][c];
+    }
+  }
+  // After full elimination the system is diagonal: x[i] = M[i][n] / M[i][i].
+  return M.map((row, i) => row[n] / row[i]);
 }
 
 export interface CalSample {
@@ -74,27 +85,28 @@ export interface CalSample {
   ty: number; // target screen y, 0..1
 }
 
-/** Least-squares affine fit from calibration samples (gaze → normalized screen). */
-export function fitAffine(samples: CalSample[]): GazeCalibration | null {
-  if (samples.length < 3) return null;
-  let Sxx = 0, Sxy = 0, Syy = 0, Sx = 0, Sy = 0, n = 0;
-  let Sxtx = 0, Sytx = 0, Stx = 0;
-  let Sxty = 0, Syty = 0, Sty = 0;
+/**
+ * Least-squares quadratic fit from calibration samples (gaze → normalized
+ * screen) over the 6-term basis. Builds the 6x6 normal equations and solves.
+ */
+export function fitCalibration(samples: CalSample[]): GazeCalibration | null {
+  if (samples.length < 6) return null;
+  const N = 6;
+  const A: number[][] = Array.from({ length: N }, () => new Array(N).fill(0));
+  const bx = new Array(N).fill(0);
+  const by = new Array(N).fill(0);
   for (const s of samples) {
-    Sxx += s.gx * s.gx; Sxy += s.gx * s.gy; Syy += s.gy * s.gy;
-    Sx += s.gx; Sy += s.gy; n += 1;
-    Sxtx += s.gx * s.tx; Sytx += s.gy * s.tx; Stx += s.tx;
-    Sxty += s.gx * s.ty; Syty += s.gy * s.ty; Sty += s.ty;
+    const p = basis(s.gx, s.gy);
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) A[i][j] += p[i] * p[j];
+      bx[i] += p[i] * s.tx;
+      by[i] += p[i] * s.ty;
+    }
   }
-  const M = [
-    [Sxx, Sxy, Sx],
-    [Sxy, Syy, Sy],
-    [Sx, Sy, n],
-  ];
-  const X = solve3(M, [Sxtx, Sytx, Stx]);
-  const Y = solve3(M, [Sxty, Syty, Sty]);
-  if (!X || !Y) return null;
-  return { ax: X[0], bx: X[1], cx: X[2], ay: Y[0], by: Y[1], cy: Y[2] };
+  const kx = solveLinear(A, bx);
+  const ky = solveLinear(A, by);
+  if (!kx || !ky) return null;
+  return { kx, ky };
 }
 
 /** All gaze-selectable controls currently on screen. */

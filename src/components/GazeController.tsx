@@ -4,7 +4,7 @@ import {
   gazeToPoint,
   resolveTarget,
   dwellables,
-  fitAffine,
+  fitCalibration,
   type Pt,
   type GazeCalibration,
   type CalSample,
@@ -57,6 +57,8 @@ export function GazeController({
   const [progress, setProgress] = useState(0);
   const [calStep, setCalStep] = useState(-1);
   const [calProgress, setCalProgress] = useState(0);
+  const [showDrift, setShowDrift] = useState(false);
+  const driftShownRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackerRef = useRef<GazeTracker | null>(null);
@@ -112,6 +114,8 @@ export function GazeController({
     let lostFace = 0;
     let suppressed: HTMLElement | null = null;
     let lastNow = performance.now();
+    let driftFrames = 0;
+    let driftNull = 0;
 
     // Only push state when it visibly changes (avoid 60fps re-renders).
     let lastDot: Pt | null = null;
@@ -143,7 +147,7 @@ export function GazeController({
       } else if (elapsed >= SETTLE_MS + COLLECT_MS) {
         const next = calStepRef.current + 1;
         if (next >= CAL_TARGETS.length) {
-          const model = fitAffine(calSamplesRef.current);
+          const model = fitCalibration(calSamplesRef.current);
           calActiveRef.current = false;
           setCalStep(-1);
           setCalProgress(0);
@@ -202,6 +206,20 @@ export function GazeController({
           pushDot(pt);
 
           const target = resolveTarget(pt, dwellables());
+
+          // Drift watch: if the gaze keeps landing on nothing, suggest recalibration.
+          driftFrames += 1;
+          if (!target) driftNull += 1;
+          if (driftFrames >= 900) {
+            if (!driftShownRef.current && driftNull / driftFrames > 0.55 && !cfgRef.current.calibration) {
+              driftShownRef.current = true;
+              setShowDrift(true);
+              window.setTimeout(() => setShowDrift(false), 8000);
+            }
+            driftFrames = 0;
+            driftNull = 0;
+          }
+
           if (target === pending) {
             pendingCount += 1;
           } else {
@@ -289,6 +307,12 @@ export function GazeController({
           {status === "loading" && "📷 Camera laden…"}
           {status === "denied" && "📷 Cameratoegang geweigerd"}
           {status === "error" && "📷 Camera niet beschikbaar"}
+        </div>
+      )}
+
+      {showDrift && !calibrating && (
+        <div className="drift-hint" role="status">
+          🎯 Moeite met richten? Kalibreer opnieuw via instellingen.
         </div>
       )}
 

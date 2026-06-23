@@ -20,10 +20,18 @@ export function Tile({ tile, lang, dwellMs, accent, onSelect }: Props) {
       className="tile"
       data-accent={acc}
       aria-label={tile.label[lang]}
+      aria-busy={progress > 0}
       {...handlers}
     >
       {/* Dwell fill grows from the bottom as the gaze rests. */}
-      <span className="tile__fill" style={{ transform: `scaleY(${progress})` }} aria-hidden />
+      <span
+        className="tile__fill"
+        style={{ transform: `scaleY(${progress})` }}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress * 100)}
+      />
       <span className="tile__emoji">
         <Symbol keyword={tile.keyword} emoji={tile.emoji} />
       </span>

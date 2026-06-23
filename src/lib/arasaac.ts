@@ -13,6 +13,13 @@
 const STATIC_BASE = "https://static.arasaac.org/pictograms";
 const SEARCH_BASE = "https://api.arasaac.org/api/pictograms";
 
+/** Filename-safe key, matching scripts/fetch-pictos.mjs for bundled lookups. */
+export const slug = (k: string) =>
+  k.toLowerCase().replace(/['’]/g, "").trim().replace(/[^a-z0-9]+/g, "-");
+
+/** Local bundled pictogram path (served from our own origin, offline-friendly). */
+export const localPicto = (keyword: string) => `/arasaac/${slug(keyword)}.png`;
+
 // keyword -> resolved image URL ("" means "no picto, use the emoji fallback").
 const cache = new Map<string, Promise<string>>();
 

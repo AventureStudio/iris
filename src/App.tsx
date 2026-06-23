@@ -6,6 +6,7 @@ import { PhraseBar } from "./components/PhraseBar";
 import { ToneSelector } from "./components/ToneSelector";
 import { Settings } from "./components/Settings";
 import { GazeController } from "./components/GazeController";
+import { CategoryRibbon } from "./components/CategoryRibbon";
 import { loadSettings, saveSettings, type Settings as SettingsModel } from "./lib/settings";
 import { speak, speakUrgent, stopSpeaking, beep } from "./lib/speech";
 import { t, TONE_EMOJI } from "./i18n";
@@ -76,6 +77,10 @@ export default function App() {
     setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
   }, []);
 
+  const jumpTo = useCallback((boardId: string) => {
+    setStack(boardId === "home" ? ["home"] : ["home", boardId]);
+  }, []);
+
   const speakPhrase = useCallback(() => {
     if (words.length === 0) return;
     say(words.map((w) => w.text).join(" "));
@@ -137,6 +142,13 @@ export default function App() {
           onChange={(tone) => patchSettings({ tone })}
         />
       </div>
+
+      <CategoryRibbon
+        lang={settings.lang}
+        currentBoard={boardId}
+        dwellMs={settings.dwellMs}
+        onJump={jumpTo}
+      />
 
       <main className="content">
         <Board board={board} lang={settings.lang} dwellMs={settings.dwellMs} onSelect={onSelect} />
