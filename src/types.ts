@@ -23,6 +23,8 @@ export interface Tile {
   to?: string;
   /** Accent color key for the tile; falls back to the board accent. */
   accent?: string;
+  /** Urgent phrase: spoken loudly and repeated (e.g. a call for help). */
+  urgent?: boolean;
 }
 
 export interface Board {

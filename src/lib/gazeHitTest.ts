@@ -101,24 +101,30 @@ export function fitAffine(samples: CalSample[]): GazeCalibration | null {
 export function dwellables(): HTMLElement[] {
   return Array.from(
     document.querySelectorAll<HTMLElement>(
-      ".tile, .action:not([disabled]), .tone, .iconbtn:not([disabled]), .modal__close, .btn-secondary",
+      ".tile, .chip, .action:not([disabled]), .tone, .iconbtn:not([disabled]), .modal__close, .btn-secondary",
     ),
   );
 }
 
-const PAD = 16;
+// Gaze error grows toward the screen edges, so pad targets more out there.
+function edgePad(v: number, limit: number): number {
+  const d = Math.min(v, limit - v);
+  return d < 90 ? 36 : d < 220 ? 24 : 16;
+}
 
 export function resolveTarget(pt: Pt, els: HTMLElement[]): HTMLElement | null {
+  const padX = edgePad(pt.x, window.innerWidth);
+  const padY = edgePad(pt.y, window.innerHeight);
   // 1) Smallest padded rect that contains the point.
   let best: HTMLElement | null = null;
   let bestArea = Infinity;
   for (const el of els) {
     const r = el.getBoundingClientRect();
     if (
-      pt.x >= r.left - PAD &&
-      pt.x <= r.right + PAD &&
-      pt.y >= r.top - PAD &&
-      pt.y <= r.bottom + PAD
+      pt.x >= r.left - padX &&
+      pt.x <= r.right + padX &&
+      pt.y >= r.top - padY &&
+      pt.y <= r.bottom + padY
     ) {
       const area = r.width * r.height;
       if (area < bestArea) {

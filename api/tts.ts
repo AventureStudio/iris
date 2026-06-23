@@ -31,7 +31,13 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+  let body: { text?: string; tone?: string };
+  try {
+    body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+  } catch {
+    res.status(400).json({ error: "invalid json" });
+    return;
+  }
   const text: string = (body.text || "").toString().slice(0, 800);
   const tone: Tone = (["calm", "normal", "happy", "playful"].includes(body.tone) ? body.tone : "normal") as Tone;
   if (!text.trim()) {

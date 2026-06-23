@@ -2,8 +2,9 @@ import type { Board } from "../types";
 
 /**
  * Iris core vocabulary. Each tile carries an ARASAAC search keyword so it shows
- * the familiar pictogram, with an emoji as the offline/no-match fallback.
- * Content is original and intentionally generic — no personal data.
+ * the familiar clinical pictogram, with an emoji as the offline/no-match
+ * fallback. Keywords are single, common terms — multi-word/apostrophe phrases do
+ * not resolve in ARASAAC. Content is original and generic — no personal data.
  */
 
 const phrase = (id: string, keyword: string, emoji: string, nl: string, en: string, fr: string) =>
@@ -18,8 +19,11 @@ export const HOME: Board = {
   emoji: "💬",
   accent: "indigo",
   tiles: [
-    { id: "to-greet", kind: "board", to: "greet", keyword: "hello", emoji: "👋", label: { nl: "Hallo", en: "Hello", fr: "Bonjour" }, accent: "sky" },
+    { id: "sos", kind: "phrase", urgent: true, keyword: "help", emoji: "🆘", accent: "alert",
+      label: { nl: "Help mij, kom alsjeblieft!", en: "Help me, please come!", fr: "Aidez-moi, venez vite !" } },
+    { id: "to-greet", kind: "board", to: "greet", keyword: "greeting", emoji: "👋", label: { nl: "Hallo", en: "Hello", fr: "Bonjour" }, accent: "sky" },
     { id: "to-needs", kind: "board", to: "needs", keyword: "want", emoji: "🙏", label: { nl: "Ik wil", en: "I need", fr: "Je veux" }, accent: "amber" },
+    { id: "to-comfort", kind: "board", to: "comfort", keyword: "pain", emoji: "🩺", label: { nl: "Pijn & comfort", en: "Pain & comfort", fr: "Douleur & confort" }, accent: "alert" },
     { id: "to-feel", kind: "board", to: "feel", keyword: "feeling", emoji: "💚", label: { nl: "Gevoel", en: "Feelings", fr: "Émotions" }, accent: "emerald" },
     { id: "to-reply", kind: "board", to: "reply", keyword: "answer", emoji: "💭", label: { nl: "Antwoord", en: "Reply", fr: "Réponse" }, accent: "violet" },
     { id: "to-people", kind: "board", to: "people", keyword: "family", emoji: "👨‍👩‍👧", label: { nl: "Mensen", en: "People", fr: "Personnes" }, accent: "rose" },
@@ -37,7 +41,7 @@ export const BOARDS: Record<string, Board> = {
       phrase("g-hi", "hello", "👋", "Hallo!", "Hello!", "Bonjour !"),
       phrase("g-welcome", "happy", "🤗", "Fijn dat je er bent.", "Good to see you.", "Content de te voir."),
       phrase("g-name", "name", "🙋", "Hoe heet je?", "What is your name?", "Comment tu t'appelles ?"),
-      phrase("g-howru", "how are you", "🌞", "Hoe gaat het?", "How are you?", "Comment ça va ?"),
+      phrase("g-howru", "greeting", "🌞", "Hoe gaat het?", "How are you?", "Comment ça va ?"),
       phrase("g-bye", "goodbye", "👋", "Tot ziens!", "Goodbye!", "Au revoir !"),
       phrase("g-wait", "wait", "⏳", "Wacht even, alsjeblieft.", "One moment, please.", "Un instant, s'il te plaît."),
     ],
@@ -51,8 +55,24 @@ export const BOARDS: Record<string, Board> = {
       phrase("n-eat", "eat", "🍎", "Ik heb honger.", "I am hungry.", "J'ai faim."),
       phrase("n-rest", "sleep", "🛏️", "Ik wil rusten.", "I would like to rest.", "Je veux me reposer."),
       phrase("n-music", "music", "🎵", "Zet muziek aan.", "Put on some music.", "Mets de la musique."),
-      phrase("n-out", "go out", "🌳", "Ik wil naar buiten.", "I want to go outside.", "Je veux sortir."),
+      phrase("n-out", "outside", "🌳", "Ik wil naar buiten.", "I want to go outside.", "Je veux sortir."),
       phrase("n-help", "help", "🆘", "Ik heb hulp nodig.", "I need help.", "J'ai besoin d'aide."),
+    ],
+  },
+
+  comfort: {
+    id: "comfort", emoji: "🩺", accent: "alert",
+    title: { nl: "Pijn & comfort", en: "Pain & comfort", fr: "Douleur & confort" },
+    tiles: [
+      phrase("c-pain", "pain", "🤕", "Ik heb pijn.", "I am in pain.", "J'ai mal."),
+      phrase("c-breath", "breathing", "🫁", "Ik kan moeilijk ademen.", "I have trouble breathing.", "J'ai du mal à respirer."),
+      phrase("c-hot", "hot", "🥵", "Ik heb het te warm.", "I am too hot.", "J'ai trop chaud."),
+      phrase("c-cold", "cold", "🥶", "Ik heb het te koud.", "I am too cold.", "J'ai trop froid."),
+      phrase("c-move", "position", "🛏️", "Ik wil anders liggen.", "Please reposition me.", "Repositionnez-moi."),
+      phrase("c-toilet", "toilet", "🚽", "Ik moet naar het toilet.", "I need the toilet.", "J'ai besoin des toilettes."),
+      phrase("c-itch", "itch", "🖐️", "Het jeukt.", "I have an itch.", "Ça me démange."),
+      phrase("c-fear", "scared", "😨", "Ik ben bang.", "I feel scared.", "J'ai peur."),
+      phrase("c-cramp", "cramp", "🦵", "Ik heb kramp.", "I have a cramp.", "J'ai une crampe."),
     ],
   },
 
@@ -63,8 +83,8 @@ export const BOARDS: Record<string, Board> = {
       phrase("f-good", "good", "😊", "Ik voel me goed.", "I feel good.", "Je me sens bien."),
       phrase("f-happy", "happy", "😄", "Ik ben blij.", "I am happy.", "Je suis content."),
       phrase("f-tired", "tired", "😴", "Ik ben moe.", "I am tired.", "Je suis fatigué."),
-      phrase("f-pain", "pain", "🤕", "Ik heb pijn.", "I am in pain.", "J'ai mal."),
       phrase("f-sad", "sad", "😢", "Ik ben verdrietig.", "I feel sad.", "Je suis triste."),
+      phrase("f-angry", "angry", "😠", "Ik ben boos.", "I am angry.", "Je suis en colère."),
       phrase("f-love", "love", "❤️", "Ik hou van je.", "I love you.", "Je t'aime."),
     ],
   },
@@ -75,10 +95,10 @@ export const BOARDS: Record<string, Board> = {
     tiles: [
       phrase("r-yes", "yes", "✅", "Ja.", "Yes.", "Oui."),
       phrase("r-no", "no", "❌", "Nee.", "No.", "Non."),
-      phrase("r-maybe", "maybe", "🤔", "Misschien.", "Maybe.", "Peut-être."),
-      phrase("r-thanks", "thank you", "🙏", "Dank je wel.", "Thank you.", "Merci."),
+      phrase("r-maybe", "doubt", "🤔", "Misschien.", "Maybe.", "Peut-être."),
+      phrase("r-thanks", "thanks", "🙏", "Dank je wel.", "Thank you.", "Merci."),
       phrase("r-again", "repeat", "🔁", "Kun je dat herhalen?", "Can you say that again?", "Tu peux répéter ?"),
-      phrase("r-dontknow", "i don't know", "🤷", "Ik weet het niet.", "I don't know.", "Je ne sais pas."),
+      phrase("r-dontknow", "unknown", "🤷", "Ik weet het niet.", "I don't know.", "Je ne sais pas."),
     ],
   },
 

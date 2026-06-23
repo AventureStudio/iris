@@ -13,9 +13,10 @@ interface Props {
   dwellMs: number;
   onSpeak: () => void;
   onClear: () => void;
+  onRemove: (index: number) => void;
 }
 
-function ActionButton(props: {
+function DwellButton(props: {
   className: string;
   label: string;
   emoji: string;
@@ -40,7 +41,19 @@ function ActionButton(props: {
   );
 }
 
-export function PhraseBar({ words, lang, dwellMs, onSpeak, onClear }: Props) {
+/** A composed word; dwelling on it removes it from the phrase. */
+function Chip(props: { word: Word; dwellMs: number; onRemove: () => void }) {
+  const { progress, handlers } = useDwell(props.dwellMs, props.onRemove);
+  return (
+    <button type="button" className="chip" aria-label={`verwijder ${props.word.text}`} {...handlers}>
+      <span className="chip__fill" style={{ transform: `scaleY(${progress})` }} aria-hidden />
+      <span aria-hidden>{props.word.emoji}</span> {props.word.text}
+      <span className="chip__x" aria-hidden>✕</span>
+    </button>
+  );
+}
+
+export function PhraseBar({ words, lang, dwellMs, onSpeak, onClear, onRemove }: Props) {
   const empty = words.length === 0;
   return (
     <div className="phrasebar" role="region" aria-label="phrase">
@@ -49,14 +62,12 @@ export function PhraseBar({ words, lang, dwellMs, onSpeak, onClear }: Props) {
           <span className="phrasebar__placeholder">{t("emptyPhrase", lang)}</span>
         ) : (
           words.map((w, i) => (
-            <span className="chip" key={i}>
-              <span aria-hidden>{w.emoji}</span> {w.text}
-            </span>
+            <Chip key={i} word={w} dwellMs={dwellMs} onRemove={() => onRemove(i)} />
           ))
         )}
       </div>
       <div className="phrasebar__actions">
-        <ActionButton
+        <DwellButton
           className="action action--speak"
           emoji="🔊"
           label={t("speak", lang)}
@@ -64,7 +75,7 @@ export function PhraseBar({ words, lang, dwellMs, onSpeak, onClear }: Props) {
           disabled={empty}
           onFire={onSpeak}
         />
-        <ActionButton
+        <DwellButton
           className="action action--clear"
           emoji="🧹"
           label={t("clear", lang)}

@@ -7,7 +7,7 @@ import { ToneSelector } from "./components/ToneSelector";
 import { Settings } from "./components/Settings";
 import { GazeController } from "./components/GazeController";
 import { loadSettings, saveSettings, type Settings as SettingsModel } from "./lib/settings";
-import { speak } from "./lib/speech";
+import { speak, speakUrgent, stopSpeaking, beep } from "./lib/speech";
 import { t, TONE_EMOJI } from "./i18n";
 
 interface ComposedWord {
@@ -39,13 +39,15 @@ export default function App() {
   );
 
   const say = useCallback(
-    (text: string) => {
-      speak(text, {
+    (text: string, urgent = false) => {
+      const opts = {
         lang: settings.lang,
         tone: settings.tone,
         voiceName: settings.voiceName,
         useElevenLabs: settings.useElevenLabs,
-      });
+      };
+      if (urgent) speakUrgent(text, opts);
+      else speak(text, opts);
       setFlash(text);
       window.setTimeout(() => setFlash((f) => (f === text ? null : f)), 1600);
     },
@@ -57,13 +59,18 @@ export default function App() {
       if (tile.kind === "board" && tile.to) {
         setStack((s) => [...s, tile.to!]);
       } else if (tile.kind === "phrase") {
-        say(tile.label[settings.lang]);
+        say(tile.label[settings.lang], tile.urgent);
       } else if (tile.kind === "word") {
         setWords((w) => [...w, { emoji: tile.emoji, text: tile.label[settings.lang] }]);
+        beep();
       }
     },
     [say, settings.lang],
   );
+
+  const removeWord = useCallback((index: number) => {
+    setWords((w) => w.filter((_, i) => i !== index));
+  }, []);
 
   const goBack = useCallback(() => {
     setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
@@ -94,6 +101,14 @@ export default function App() {
         </h1>
 
         <div className="topbar__right">
+          <button
+            type="button"
+            className="iconbtn iconbtn--stop"
+            onClick={() => stopSpeaking()}
+            aria-label="stop"
+          >
+            ⏹️
+          </button>
           <button
             type="button"
             className={"iconbtn" + (settings.gazeEnabled ? " iconbtn--on" : "")}
@@ -133,6 +148,7 @@ export default function App() {
         dwellMs={settings.dwellMs}
         onSpeak={speakPhrase}
         onClear={() => setWords([])}
+        onRemove={removeWord}
       />
 
       {flash && (

@@ -17,6 +17,8 @@ export interface FaceFrame {
   hasFace: boolean;
   /** Attention vector, -1..1. */
   gaze: { x: number; y: number };
+  /** Both eyes (near-)shut — used to suppress blink-fires and pause dwell. */
+  eyesClosed: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -26,7 +28,7 @@ export class GazeTracker {
   private lastVideoTime = -1;
   private lastTs = -1;
   private smooth = { x: 0, y: 0 };
-  private cached: FaceFrame = { hasFace: false, gaze: { x: 0, y: 0 } };
+  private cached: FaceFrame = { hasFace: false, gaze: { x: 0, y: 0 }, eyesClosed: false };
 
   async init(): Promise<void> {
     if (this.landmarker) return;
@@ -67,18 +69,23 @@ export class GazeTracker {
 
     const cats = result.faceBlendshapes?.[0]?.categories;
     if (!cats || cats.length === 0) {
-      this.cached = { hasFace: false, gaze: { x: 0, y: 0 } };
+      this.cached = { hasFace: false, gaze: { x: 0, y: 0 }, eyesClosed: false };
       return this.cached;
     }
 
     const b: Record<string, number> = {};
     for (const c of cats) b[c.categoryName] = c.score;
 
+    const eyesClosed = ((b.eyeBlinkLeft ?? 0) + (b.eyeBlinkRight ?? 0)) / 2 > 0.5;
+
     const raw = this.computeGaze(b, result.facialTransformationMatrixes?.[0]?.data);
-    // Light smoothing: responsive but de-jittered.
-    this.smooth.x = this.smooth.x * 0.55 + raw.x * 0.45;
-    this.smooth.y = this.smooth.y * 0.55 + raw.y * 0.45;
-    this.cached = { hasFace: true, gaze: { x: this.smooth.x, y: this.smooth.y } };
+    // Adaptive smoothing: heavier when still (kills jitter), lighter when the
+    // gaze moves fast (keeps it responsive).
+    const dist = Math.hypot(raw.x - this.smooth.x, raw.y - this.smooth.y);
+    const alpha = dist > 0.25 ? 0.7 : 0.4;
+    this.smooth.x = this.smooth.x * (1 - alpha) + raw.x * alpha;
+    this.smooth.y = this.smooth.y * (1 - alpha) + raw.y * alpha;
+    this.cached = { hasFace: true, gaze: { x: this.smooth.x, y: this.smooth.y }, eyesClosed };
     return this.cached;
   }
 

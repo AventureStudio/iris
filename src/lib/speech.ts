@@ -91,7 +91,9 @@ async function speakEleven(text: string, opts: SpeakOptions, id: number): Promis
   const url = URL.createObjectURL(blob);
   if (audioEl) {
     audioEl.pause();
+    const old = audioEl.src;
     audioEl = null;
+    if (old.startsWith("blob:")) URL.revokeObjectURL(old);
   }
   const a = new Audio(url);
   audioEl = a;
@@ -123,6 +125,43 @@ export function stopSpeaking(): void {
   if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
   if (audioEl) {
     audioEl.pause();
+    const old = audioEl.src;
     audioEl = null;
+    if (old.startsWith("blob:")) URL.revokeObjectURL(old);
   }
+}
+
+// Short non-speech confirmation tone (e.g. when a word is added to the phrase).
+let audioCtx: AudioContext | null = null;
+export function beep(): void {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    audioCtx = audioCtx ?? new Ctx();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = 660;
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.16);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.18);
+  } catch {
+    /* audio unavailable */
+  }
+}
+
+/** Speak an urgent message, repeated a few times to attract attention. */
+export function speakUrgent(text: string, opts: SpeakOptions): void {
+  speak(text, opts);
+  let n = 0;
+  const iv = window.setInterval(() => {
+    n += 1;
+    if (n >= 3) {
+      window.clearInterval(iv);
+      return;
+    }
+    speak(text, opts);
+  }, 1700);
 }

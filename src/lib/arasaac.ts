@@ -20,15 +20,31 @@ function imageUrl(id: number): string {
   return `${STATIC_BASE}/${id}/${id}_300.png`;
 }
 
+async function searchOne(term: string): Promise<string> {
+  // Searching a fixed language (English) keeps the chosen picto stable across
+  // UI languages — the symbol stays the same one the user has learned.
+  const res = await fetch(`${SEARCH_BASE}/en/search/${encodeURIComponent(term)}`);
+  if (!res.ok) return "";
+  const data: unknown = await res.json();
+  if (!Array.isArray(data) || data.length === 0) return "";
+  const id = (data[0] as { _id?: number })?._id;
+  return typeof id === "number" ? imageUrl(id) : "";
+}
+
 async function lookup(keyword: string): Promise<string> {
+  // Normalize: lowercase, drop apostrophes, collapse spaces. ARASAAC only
+  // resolves single common terms, so fall back word-by-word for phrases.
+  const norm = keyword.toLowerCase().replace(/['’]/g, "").replace(/\s+/g, " ").trim();
   try {
-    // Searching a fixed language (English) keeps the chosen picto stable across
-    // UI languages — the symbol stays the same one the user has learned.
-    const res = await fetch(`${SEARCH_BASE}/en/search/${encodeURIComponent(keyword)}`);
-    if (!res.ok) return "";
-    const data: Array<{ _id: number }> = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return "";
-    return imageUrl(data[0]._id);
+    let hit = await searchOne(norm);
+    if (!hit && norm.includes(" ")) {
+      for (const token of norm.split(" ")) {
+        if (token.length < 2) continue;
+        hit = await searchOne(token);
+        if (hit) break;
+      }
+    }
+    return hit;
   } catch {
     return "";
   }

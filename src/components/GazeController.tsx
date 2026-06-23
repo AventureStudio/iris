@@ -32,16 +32,15 @@ type Status = "off" | "loading" | "running" | "denied" | "error";
 const HYSTERESIS_FRAMES = 3;
 const LOST_FACE_FRAMES = 12;
 
-// Calibration targets (normalized screen positions) and per-point timings.
+// 9-point (3×3) calibration grid + per-point timings.
 const CAL_TARGETS: Array<[number, number]> = [
   [0.5, 0.5],
-  [0.12, 0.12],
-  [0.88, 0.12],
-  [0.88, 0.88],
-  [0.12, 0.88],
+  [0.12, 0.12], [0.5, 0.12], [0.88, 0.12],
+  [0.12, 0.5], [0.88, 0.5],
+  [0.12, 0.88], [0.5, 0.88], [0.88, 0.88],
 ];
-const SETTLE_MS = 650;
-const COLLECT_MS = 850;
+const SETTLE_MS = 600;
+const COLLECT_MS = 750;
 
 export function GazeController({
   enabled,
@@ -56,17 +55,17 @@ export function GazeController({
   const [status, setStatus] = useState<Status>("off");
   const [dot, setDot] = useState<Pt | null>(null);
   const [progress, setProgress] = useState(0);
-  const [calStep, setCalStep] = useState(-1); // -1 = not calibrating
+  const [calStep, setCalStep] = useState(-1);
   const [calProgress, setCalProgress] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackerRef = useRef<GazeTracker | null>(null);
 
   const cfgRef = useRef({ dwellMs, config, calibration });
+  const onCalibratedRef = useRef(onCalibrated);
   const calRef = useRef({ x: 0, y: 0 });
   const recenterRef = useRef(false);
 
-  // Calibration loop state.
   const calActiveRef = useRef(false);
   const calStepRef = useRef(0);
   const calStepStartRef = useRef(0);
@@ -75,6 +74,9 @@ export function GazeController({
   useEffect(() => {
     cfgRef.current = { dwellMs, config, calibration };
   }, [dwellMs, config, calibration]);
+  useEffect(() => {
+    onCalibratedRef.current = onCalibrated;
+  }, [onCalibrated]);
 
   useEffect(() => {
     if (recenterNonce > 0) recenterRef.current = true;
@@ -106,9 +108,25 @@ export function GazeController({
     let focus: HTMLElement | null = null;
     let pending: HTMLElement | null = null;
     let pendingCount = 0;
-    let dwellStart = 0;
+    let dwellAccum = 0; // focused, eyes-open time (ms) — pauses on blink/loss
     let lostFace = 0;
     let suppressed: HTMLElement | null = null;
+    let lastNow = performance.now();
+
+    // Only push state when it visibly changes (avoid 60fps re-renders).
+    let lastDot: Pt | null = null;
+    let lastProg = 0;
+    const pushDot = (p: Pt | null) => {
+      if (!p && !lastDot) return;
+      if (p && lastDot && Math.abs(p.x - lastDot.x) < 1.5 && Math.abs(p.y - lastDot.y) < 1.5) return;
+      lastDot = p;
+      setDot(p);
+    };
+    const pushProg = (v: number) => {
+      if (Math.abs(v - lastProg) < 0.02 && v !== 0 && v !== 1) return;
+      lastProg = v;
+      setProgress(v);
+    };
 
     const setHighlight = (el: HTMLElement | null) => {
       document.querySelectorAll(".gaze-target").forEach((n) => n.classList.remove("gaze-target"));
@@ -119,7 +137,6 @@ export function GazeController({
       if (calStepStartRef.current === 0) calStepStartRef.current = now;
       const elapsed = now - calStepStartRef.current;
       const [tx, ty] = CAL_TARGETS[calStepRef.current];
-
       if (elapsed >= SETTLE_MS && elapsed < SETTLE_MS + COLLECT_MS) {
         calSamplesRef.current.push({ gx: gaze.x, gy: gaze.y, tx, ty });
         setCalProgress((elapsed - SETTLE_MS) / COLLECT_MS);
@@ -130,7 +147,7 @@ export function GazeController({
           calActiveRef.current = false;
           setCalStep(-1);
           setCalProgress(0);
-          onCalibrated(model); // null if degenerate → keeps manual mapping
+          onCalibratedRef.current(model);
         } else {
           calStepRef.current = next;
           calStepStartRef.current = 0;
@@ -145,23 +162,26 @@ export function GazeController({
     const loop = () => {
       const video = videoRef.current;
       if (!cancelled && video) {
-        const frame = tracker.detect(video, performance.now());
         const now = performance.now();
+        const dt = Math.min(100, now - lastNow);
+        lastNow = now;
+        const frame = tracker.detect(video, now);
 
         if (calActiveRef.current) {
-          // During calibration: collect samples, no selection.
-          setDot(null);
+          pushDot(null);
           setHighlight(null);
-          if (frame.hasFace) runCalibration(frame.gaze, now);
+          if (frame.hasFace && !frame.eyesClosed) runCalibration(frame.gaze, now);
+          else if (calStepStartRef.current !== 0) calStepStartRef.current += dt; // pause on blink/loss
         } else if (!frame.hasFace) {
           lostFace += 1;
           if (lostFace >= LOST_FACE_FRAMES && focus) {
-            setDot(null);
+            pushDot(null);
             focus = null;
             pending = null;
             pendingCount = 0;
+            dwellAccum = 0;
             setHighlight(null);
-            setProgress(0);
+            pushProg(0);
           }
         } else {
           lostFace = 0;
@@ -179,7 +199,7 @@ export function GazeController({
             invertY: cfg.invertY,
             calibration: cal,
           });
-          setDot(pt);
+          pushDot(pt);
 
           const target = resolveTarget(pt, dwellables());
           if (target === pending) {
@@ -190,21 +210,24 @@ export function GazeController({
           }
           if (target !== focus && (pendingCount >= HYSTERESIS_FRAMES || target === null)) {
             focus = target;
-            dwellStart = now;
+            dwellAccum = 0;
             setHighlight(focus);
             if (focus !== suppressed) suppressed = null;
           }
 
+          // Advance dwell only while eyes are open — a blink never fires.
           if (focus && focus !== suppressed) {
-            const p = Math.min(1, (now - dwellStart) / cfgRef.current.dwellMs);
-            setProgress(p);
+            if (!frame.eyesClosed) dwellAccum += dt;
+            const p = Math.min(1, dwellAccum / cfgRef.current.dwellMs);
+            pushProg(p);
             if (p >= 1) {
-              focus.click();
+              if (focus.isConnected && focus.offsetParent !== null) focus.click();
               suppressed = focus;
-              setProgress(0);
+              dwellAccum = 0;
+              pushProg(0);
             }
           } else {
-            setProgress(0);
+            pushProg(0);
           }
         }
       }

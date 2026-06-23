@@ -14,6 +14,7 @@
   --rose: #fb7185;
   --teal: #2dd4bf;
   --indigo: #818cf8;
+  --alert: #f87171;
 
   --radius: 22px;
   --gap: clamp(10px, 1.6vw, 18px);
@@ -89,7 +90,7 @@ body {
   appearance: none;
   border: 1px solid var(--line);
   background: var(--panel);
-  color: var(--ink-dim);
+  color: var(--ink);
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 15px;
@@ -155,6 +156,11 @@ body {
 .tile[data-accent="rose"] { --accent-c: var(--rose); }
 .tile[data-accent="teal"] { --accent-c: var(--teal); }
 .tile[data-accent="indigo"] { --accent-c: var(--indigo); }
+.tile[data-accent="alert"] {
+  --accent-c: var(--alert);
+  border-color: color-mix(in srgb, var(--alert) 60%, transparent);
+  background: color-mix(in srgb, var(--alert) 16%, var(--panel));
+}
 
 .tile__fill {
   position: absolute;
@@ -200,13 +206,31 @@ body {
 }
 .phrasebar__placeholder { color: var(--ink-dim); font-size: 17px; }
 .chip {
+  position: relative;
+  overflow: hidden;
+  appearance: none;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 17px;
   font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+.chip__fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: bottom;
+  transform: scaleY(0);
+  background: color-mix(in srgb, var(--rose) 40%, transparent);
+  pointer-events: none;
+}
+.chip__x { position: relative; font-size: 13px; color: var(--ink-dim); }
 .phrasebar__actions { display: flex; gap: 8px; }
 
 .action {
@@ -310,7 +334,8 @@ body {
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .board, .flash { animation: none; }
+  .board, .flash, .cal-dot { animation: none !important; }
+  .cal-dot { opacity: 1; }
   * { transition-duration: 1ms !important; }
 }
 
@@ -461,16 +486,17 @@ body {
   stroke-dasharray: 150.8; /* 2πr, r=24 */
 }
 .cal-dot {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--focus);
   box-shadow: 0 0 18px var(--focus);
-  animation: calpulse 1.2s ease-in-out infinite;
+  /* Gentle opacity-only pulse (~0.8 Hz, no scale) — safe for photosensitivity. */
+  animation: calpulse 1.6s ease-in-out infinite;
 }
 @keyframes calpulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.4); opacity: 0.7; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 .cal-status {
