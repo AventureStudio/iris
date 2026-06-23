@@ -1,33 +1,45 @@
 import { useEffect, useRef, useState } from "react";
-import { GazeTracker, type GazeConfig } from "../lib/gaze";
+import { GazeTracker } from "../lib/gaze";
+import { gazeToPoint, resolveTarget, dwellables, type Pt } from "../lib/gazeHitTest";
+
+interface GazeConfig {
+  sensitivity: number;
+  invertX: boolean;
+  invertY: boolean;
+}
 
 interface Props {
   enabled: boolean;
   dwellMs: number;
   config: GazeConfig;
-  /** Bumping this value triggers a recenter of the gaze origin. */
   recenterNonce: number;
   showPreview: boolean;
 }
 
 type Status = "off" | "loading" | "running" | "denied" | "error";
 
+const HYSTERESIS_FRAMES = 3;
+const LOST_FACE_FRAMES = 12;
+
 export function GazeController({ enabled, dwellMs, config, recenterNonce, showPreview }: Props) {
   const [status, setStatus] = useState<Status>("off");
-  const [dot, setDot] = useState<{ x: number; y: number } | null>(null);
+  const [dot, setDot] = useState<Pt | null>(null);
   const [progress, setProgress] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackerRef = useRef<GazeTracker | null>(null);
-  const cfgRef = useRef({ dwellMs, config });
 
-  // Keep live config available to the running loop without restarting it.
+  // Live config + calibration the loop reads without restarting.
+  const cfgRef = useRef({ dwellMs, config });
+  const calRef = useRef({ x: 0, y: 0 });
+  const recenterRef = useRef(false);
+
   useEffect(() => {
     cfgRef.current = { dwellMs, config };
   }, [dwellMs, config]);
 
   useEffect(() => {
-    if (trackerRef.current) trackerRef.current.recenter();
+    if (recenterNonce > 0) recenterRef.current = true;
   }, [recenterNonce]);
 
   useEffect(() => {
@@ -42,51 +54,79 @@ export function GazeController({ enabled, dwellMs, config, recenterNonce, showPr
     const tracker = new GazeTracker();
     trackerRef.current = tracker;
 
-    // Per-target dwell bookkeeping.
-    let curTarget: Element | null = null;
+    // Dwell state.
+    let focus: HTMLElement | null = null;
+    let pending: HTMLElement | null = null;
+    let pendingCount = 0;
     let dwellStart = 0;
-    let suppressed: Element | null = null;
+    let lostFace = 0;
+    let suppressed: HTMLElement | null = null;
 
-    const clearHighlight = () => {
-      document.querySelectorAll(".gaze-target").forEach((el) => el.classList.remove("gaze-target"));
+    const setHighlight = (el: HTMLElement | null) => {
+      document.querySelectorAll(".gaze-target").forEach((n) => n.classList.remove("gaze-target"));
+      el?.classList.add("gaze-target");
     };
 
     const loop = () => {
       const video = videoRef.current;
-      if (!cancelled && video && video.readyState >= 2) {
-        const pt = tracker.detect(
-          video,
-          performance.now(),
-          window.innerWidth,
-          window.innerHeight,
-          cfgRef.current.config,
-        );
-        if (pt) {
-          setDot(pt);
-          const hit = document.elementFromPoint(pt.x, pt.y);
-          const target = hit?.closest("button:not(:disabled)") ?? null;
+      if (!cancelled && video) {
+        const frame = tracker.detect(video, performance.now());
 
-          if (target !== curTarget) {
-            clearHighlight();
-            curTarget = target;
-            dwellStart = performance.now();
-            setProgress(0);
-            if (target !== suppressed) suppressed = null;
-            if (target) target.classList.add("gaze-target");
-          } else if (target && target !== suppressed) {
-            const p = Math.min(1, (performance.now() - dwellStart) / cfgRef.current.dwellMs);
-            setProgress(p);
-            if (p >= 1) {
-              (target as HTMLElement).click();
-              suppressed = target; // don't refire until gaze leaves and returns
+        if (!frame.hasFace) {
+          lostFace += 1;
+          if (lostFace >= LOST_FACE_FRAMES) {
+            setDot(null);
+            if (focus) {
+              focus = null;
+              pending = null;
+              pendingCount = 0;
+              setHighlight(null);
               setProgress(0);
             }
           }
         } else {
-          setDot(null);
-          if (curTarget) {
-            clearHighlight();
-            curTarget = null;
+          lostFace = 0;
+
+          if (recenterRef.current) {
+            calRef.current = { x: frame.gaze.x, y: frame.gaze.y };
+            recenterRef.current = false;
+          }
+
+          const { config: cfg } = cfgRef.current;
+          const pt = gazeToPoint(frame.gaze.x, frame.gaze.y, {
+            sensitivity: cfg.sensitivity,
+            calX: calRef.current.x,
+            calY: calRef.current.y,
+            invertX: cfg.invertX,
+            invertY: cfg.invertY,
+          });
+          setDot(pt);
+
+          const target = resolveTarget(pt, dwellables());
+
+          // Hysteresis: a new target must persist before stealing focus.
+          if (target === pending) {
+            pendingCount += 1;
+          } else {
+            pending = target;
+            pendingCount = 1;
+          }
+          if (target !== focus && (pendingCount >= HYSTERESIS_FRAMES || target === null)) {
+            focus = target;
+            dwellStart = performance.now();
+            setHighlight(focus);
+            if (focus !== suppressed) suppressed = null;
+          }
+
+          if (focus && focus !== suppressed) {
+            const p = Math.min(1, (performance.now() - dwellStart) / cfgRef.current.dwellMs);
+            setProgress(p);
+            if (p >= 1) {
+              focus.click();
+              suppressed = focus; // hold until gaze leaves and returns
+              setProgress(0);
+            }
+          } else {
             setProgress(0);
           }
         }
@@ -107,11 +147,13 @@ export function GazeController({ enabled, dwellMs, config, recenterNonce, showPr
         const video = videoRef.current!;
         video.srcObject = stream;
         await video.play();
+        recenterRef.current = true; // centre on first frame
         setStatus("running");
         raf = requestAnimationFrame(loop);
       } catch (e) {
         if (cancelled) return;
-        const denied = e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError");
+        const denied =
+          e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError");
         setStatus(denied ? "denied" : "error");
       }
     })();
@@ -119,7 +161,7 @@ export function GazeController({ enabled, dwellMs, config, recenterNonce, showPr
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
-      clearHighlight();
+      setHighlight(null);
       setDot(null);
       setProgress(0);
       stream?.getTracks().forEach((t) => t.stop());
@@ -130,7 +172,6 @@ export function GazeController({ enabled, dwellMs, config, recenterNonce, showPr
 
   return (
     <>
-      {/* Hidden capture element; the preview thumbnail mirrors it when shown. */}
       <video
         ref={videoRef}
         className={"gaze-video" + (showPreview && status === "running" ? " gaze-video--show" : "")}
