@@ -39,7 +39,8 @@ export default async function handler(req: any, res: any) {
     return;
   }
   const text: string = (body.text || "").toString().slice(0, 800);
-  const tone: Tone = (["calm", "normal", "happy", "playful"].includes(body.tone) ? body.tone : "normal") as Tone;
+  const reqTone = body.tone ?? "normal";
+  const tone: Tone = (["calm", "normal", "happy", "playful"].includes(reqTone) ? reqTone : "normal") as Tone;
   if (!text.trim()) {
     res.status(400).json({ error: "missing text" });
     return;
