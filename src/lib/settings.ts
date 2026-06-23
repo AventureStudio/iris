@@ -1,4 +1,5 @@
 import type { Lang, Tone } from "../types";
+import type { GazeCalibration } from "./gazeHitTest";
 
 export interface Settings {
   lang: Lang;
@@ -13,6 +14,8 @@ export interface Settings {
   gazeInvertX: boolean;
   gazeInvertY: boolean;
   gazePreview: boolean;
+  /** Multi-point calibration model (gaze → screen), or null = use sensitivity. */
+  gazeCalibration: GazeCalibration | null;
   /** Use ElevenLabs (via /api/tts) instead of the browser voice. */
   useElevenLabs: boolean;
 }
@@ -29,6 +32,7 @@ export const DEFAULTS: Settings = {
   gazeInvertX: true,
   gazeInvertY: false,
   gazePreview: true,
+  gazeCalibration: null,
   useElevenLabs: false,
 };
 

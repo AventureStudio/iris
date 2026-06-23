@@ -22,7 +22,10 @@ type UIKey =
   | "invertY"
   | "showPreview"
   | "recenter"
-  | "elevenLabs";
+  | "elevenLabs"
+  | "calibrate"
+  | "clearCalibration"
+  | "calibrated";
 
 export const UI: Record<UIKey, Record<Lang, string>> = {
   appName: { nl: "Iris", en: "Iris", fr: "Iris" },
@@ -51,6 +54,9 @@ export const UI: Record<UIKey, Record<Lang, string>> = {
   showPreview: { nl: "Cameravoorbeeld", en: "Camera preview", fr: "Aperçu caméra" },
   recenter: { nl: "Midden herijken", en: "Recenter", fr: "Recentrer" },
   elevenLabs: { nl: "Natuurlijke stem (ElevenLabs)", en: "Natural voice (ElevenLabs)", fr: "Voix naturelle (ElevenLabs)" },
+  calibrate: { nl: "Kalibreren (5 punten)", en: "Calibrate (5 points)", fr: "Calibrer (5 points)" },
+  clearCalibration: { nl: "Kalibratie wissen", en: "Clear calibration", fr: "Effacer la calibration" },
+  calibrated: { nl: "✓ Gekalibreerd", en: "✓ Calibrated", fr: "✓ Calibré" },
 };
 
 export const TONE_LABELS: Record<Tone, Record<Lang, string>> = {

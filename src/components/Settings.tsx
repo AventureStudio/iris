@@ -9,10 +9,11 @@ interface Props {
   settings: SettingsModel;
   onChange: (patch: Partial<SettingsModel>) => void;
   onRecenter: () => void;
+  onCalibrate: () => void;
   onClose: () => void;
 }
 
-export function Settings({ settings, onChange, onRecenter, onClose }: Props) {
+export function Settings({ settings, onChange, onRecenter, onCalibrate, onClose }: Props) {
   const voices = listVoices();
   return (
     <div className="modal" role="dialog" aria-modal="true" aria-label={t("settings", settings.lang)}>
@@ -98,6 +99,21 @@ export function Settings({ settings, onChange, onRecenter, onClose }: Props) {
               <button type="button" className="btn-secondary" onClick={onRecenter}>
                 🎯 {t("recenter", settings.lang)}
               </button>
+              <button type="button" className="btn-secondary" onClick={onCalibrate}>
+                🎚️ {t("calibrate", settings.lang)}
+              </button>
+              {settings.gazeCalibration && (
+                <div className="cal-status">
+                  <span>{t("calibrated", settings.lang)}</span>
+                  <button
+                    type="button"
+                    className="btn-link"
+                    onClick={() => onChange({ gazeCalibration: null })}
+                  >
+                    {t("clearCalibration", settings.lang)}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

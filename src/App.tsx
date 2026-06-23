@@ -22,6 +22,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [recenterNonce, setRecenterNonce] = useState(0);
+  const [calibrateNonce, setCalibrateNonce] = useState(0);
 
   const boardId = stack[stack.length - 1];
   const board = BOARDS[boardId] ?? BOARDS.home;
@@ -145,6 +146,10 @@ export default function App() {
           settings={settings}
           onChange={patchSettings}
           onRecenter={() => setRecenterNonce((n) => n + 1)}
+          onCalibrate={() => {
+            setShowSettings(false); // overlay needs the full screen
+            setCalibrateNonce((n) => n + 1);
+          }}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -158,6 +163,9 @@ export default function App() {
           invertY: settings.gazeInvertY,
         }}
         recenterNonce={recenterNonce}
+        calibrateNonce={calibrateNonce}
+        calibration={settings.gazeCalibration}
+        onCalibrated={(cal) => patchSettings({ gazeCalibration: cal })}
         showPreview={settings.gazePreview}
       />
     </div>
